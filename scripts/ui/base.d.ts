@@ -74,7 +74,7 @@ declare class AccessibleCraftingTableFormData {
 	 * @param durability Durability for the item. Default=0. Clamped between 1 & 99.
 	 * @param enchanted If the item is enchanted or not.
 	 */
-	button(slot: number, itemName?: string | RawMessage, itemDesc?: (string | RawMessage)[], texture?: string, stackAmount?: number, durability?: number, enchanted?: boolean): FurnaceFormData;
+	button(slot: number, itemName?: string | RawMessage, itemDesc?: (string | RawMessage)[], texture?: string, stackAmount?: number, durability?: number, enchanted?: boolean): AccessibleCraftingTableFormData;
 	/**
 	  * @remarks
 	  * Creates and shows this modal popup form. Returns

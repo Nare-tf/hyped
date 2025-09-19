@@ -8,6 +8,7 @@ import { MenuRegister } from "./menu/menu_register.js";
 import { craftingUi } from "./ui/crafting_table_ui.js";
 import "./menu/init.js";
 import { itemEvents } from "./itemsRegister.js";
+import { chestDB } from "./ui/chest_ui.js";
 
 let i;
 world.afterEvents.itemUse.subscribe(({itemStack: item, source: player}) => {
@@ -66,6 +67,7 @@ world.beforeEvents.chatSend.subscribe((evd) => {
         evd.cancel = true;
         console.warn(`repl: ${k.join(" ")}`); // log it to console too
     }
+    if (evd.message  == "log") console.warn(chestDB.values())
 }) 
 function primaryMenu(player) {
 	MenuRegister.show("prime_menu", player)
