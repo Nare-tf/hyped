@@ -37,6 +37,9 @@ export const Registry = {
             } catch (e) {
                 console.error(`Error using ability ${id}: ${e}`);
             }
+        } else if (player.mana().has(cost) === false && useMana) {
+            updateManaDisplay(player, "insufficient", cost);
+            player.playSound("random.pop", { volume: 0.5, pitch: 1 });
         }
     }
 }

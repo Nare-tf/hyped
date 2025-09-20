@@ -42,6 +42,9 @@ function updateManaDisplay(player, mode, ...args) {
             player.onScreenDisplay.setActionBar(`§9Mana: §b${player.mana().get()}§7/§b${player.mana().getMax()} §c-${args[0]}`);
             player.mana().remove(args[0]);
             break;
+        case "insufficient":
+            player.onScreenDisplay.setActionBar(`§9Mana: §b${player.mana().get()}§7/§b${player.mana().getMax()} §c (Not enough mana!)`);
+            break;
         case "add":
             player.onScreenDisplay.setActionBar(`§9Mana: §b${player.mana().get()}§7/§b${player.mana().getMax()} §a+${args[0]}`);
             player.mana().add(args[0]);

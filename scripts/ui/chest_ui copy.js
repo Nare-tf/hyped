@@ -1,24 +1,11 @@
 import { AccessibleChestFormData } from "./base.js";
+import { Container, system, world } from "@minecraft/server";
 import { giveItem, isSameItem, stackNum } from "../utils/utils.js";
 import { ItemDB } from "../database/ItemDB-c.js";
-import { system, world } from "@minecraft/server";
 
 // Global ItemDB instance for chest storage
-const ChestFormData = AccessibleChestFormData
-let chestDB = null;
-
-// Initialize when first used
-function getChestDB() {
-    if (!chestDB) {
-        try {
-            chestDB = new ItemDB("chest_storage");
-        } catch (error) {
-            throw new Error("World not loaded yet. Cannot access chest storage.");
-        }
-    }
-    return chestDB;
-}
-world.afterEvents.worldLoad.subscribe(getChestDB)
+let chestDB = null
+world.afterEvents.worldLoad.subscribe(() => chestDB = new ItemDB("chest_storage"));
 
 /**
  * Enhanced interactive chest UI with ItemDB integration
@@ -50,7 +37,7 @@ export function chestUi(player, old, data = {
     saveInterval: 100 // Auto-save every 100 ticks if dirty
 }) {
     const inv = player.getComponent("inventory").container;
-    const chestUI = new ChestFormData(chestConfig.size).title(chestConfig.title);
+    const chestUI = new AccessibleChestFormData(chestConfig.size).title(chestConfig.title);
 
     // Initialize chest ID and load from database
     if (!data.chestId && chestConfig.chestId) {
@@ -293,7 +280,7 @@ export function enderChest(player) {
         autoSave: true
     }, {
         title: "§5Ender Chest",
-        size: "large",
+        size: "54",
         chestId,
         autoSave: true,
         allowPlayerItems: true,
@@ -318,7 +305,6 @@ export function storageChest(player, location, title = "Storage Chest") {
         old: null,
         oldPres: undefined,
         chestItems: new Map(),
-        chestId,
         autoSave: true
     }, {
         title,
@@ -364,7 +350,7 @@ export function guildChest(player, guildId, tier = "large") {
 }
 
 /**
- * Auction house interface (browse-only)
+ * Auction house interface (browse-only) - Fixed pattern logic
  * @param {Player} player 
  * @param {Map<number, {item: ItemStack, price: number, seller: string}>} auctions 
  */
@@ -378,17 +364,26 @@ export function auctionHouse(player, auctions = new Map()) {
         chestItems: new Map()
     };
 
-    // Convert auctions to display items with price lore
-    auctions.forEach((auction, slot) => {
-        const displayItem = auction.item.clone();
-        const currentLore = displayItem.getLore() || [];
-        displayItem.setLore([
-            ...currentLore,
-            `§6Price: §e${auction.price} coins`,
-            `§7Seller: §f${auction.seller}`,
-            `§aClick to purchase!`
-        ]);
-        data.chestItems.set(slot, displayItem);
+    // Convert auctions to display items with price lore - place in empty slots only
+    let currentSlot = 0;
+    auctions.forEach((auction) => {
+        // Skip border slots (based on pattern)
+        while (currentSlot < 54 && isBorderSlot(currentSlot)) {
+            currentSlot++;
+        }
+        
+        if (currentSlot < 54) {
+            const displayItem = auction.item.clone();
+            const currentLore = displayItem.getLore() || [];
+            displayItem.setLore([
+                ...currentLore,
+                `§6Price: §e${auction.price} coins`,
+                `§7Seller: §f${auction.seller}`,
+                `§aClick to purchase!`
+            ]);
+            data.chestItems.set(currentSlot, displayItem);
+            currentSlot++;
+        }
     });
 
     chestUi(player, undefined, data, {
@@ -396,26 +391,47 @@ export function auctionHouse(player, auctions = new Map()) {
         size: "large",
         pattern: [
             'ggggggggg',
-            'g       g',
-            'g       g',
-            'g       g',
-            'g       g',
+            'g   g   g',
+            'g   g   g',
+            'g   g   g',
+            'g   g   g',
             'ggggggggg'
         ],
         keys: {
-            g: ["", [], "minecraft:yellow_glass_pane", 1, 0, false]
+            g: {itemName: "", itemDesc: [], texture: "minecraft:yellow_stained_glass_pane", stackAmount: 1, durability: 0, enchanted: false}
         },
         allowPlayerItems: false,
         allowChestItems: false,
         readOnly: true,
         onItemChange: (slot, item, allItems) => {
-            if (!item && auctions.has(slot)) {
-                // Handle purchase
-                const auction = auctions.get(slot);
-                handleAuctionPurchase(player, auction);
+            if (!item) {
+                // Find which auction was clicked
+                let auctionIndex = 0;
+                let checkSlot = 0;
+                for (const [originalSlot] of auctions) {
+                    while (checkSlot < 54 && isBorderSlot(checkSlot)) {
+                        checkSlot++;
+                    }
+                    if (checkSlot === slot) {
+                        const auctionArray = Array.from(auctions.values());
+                        handleAuctionPurchase(player, auctionArray[auctionIndex]);
+                        break;
+                    }
+                    checkSlot++;
+                    auctionIndex++;
+                }
             }
         }
     });
+}
+
+// Helper function to check if slot is border based on pattern
+function isBorderSlot(slot) {
+    const row = Math.floor(slot / 9);
+    const col = slot % 9;
+    
+    // First/last row or first/last column = border
+    return row === 0 || row === 5 || col === 0 || col === 8;
 }
 
 /**
@@ -477,7 +493,7 @@ export function shopChest(player, shopItems = new Map(), shopName = "Shop") {
                 // Handle purchase logic here
                 player.sendMessage(`§aTrying to buy ${shopItem.item.nameTag} for ${shopItem.price} coins!`);
                 // Restore the item (it's a shop, items don't disappear)
-                setTimeout(() => {
+                system.runTimeout(() => {
                     data.chestItems.set(slot, shopItem.item.clone());
                 }, 50);
             }

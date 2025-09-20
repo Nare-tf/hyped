@@ -62,7 +62,7 @@ export function chestUi(player, old, data = {
         }
     });
 
-    chestUI.show(player).then(response => {
+      chestUI.show(player).then(response => {
         if (response.canceled) {
             // Save to database before closing
             if (data.chestId && chestConfig.autoSave) {
@@ -88,7 +88,7 @@ export function chestUi(player, old, data = {
         slot = pres.slot;
 
         const getItem = (type, index) => {
-            return type === "inventory" ? inv.getItem(Number(index)) : data.chestItems.get(index);
+            return type === "inventory" ? inv.getItem(Number(index)) : data.chestItems.get(Number(index));
         };
 
         const setItem = (type, index, item) => {
@@ -96,9 +96,9 @@ export function chestUi(player, old, data = {
                 inv.setItem(Number(index), item);
             } else {
                 if (item) {
-                    data.chestItems.set(index, item);
+                    data.chestItems.set(Number(index), item);
                 } else {
-                    data.chestItems.delete(index);
+                    data.chestItems.delete(Number(index));
                 }
                 
                 // Mark as dirty for auto-save
@@ -118,24 +118,23 @@ export function chestUi(player, old, data = {
             const toggleItem = getItem(...data.toggleSlot.split(":"));
             if (!toggleItem) return resetToggle();
 
-            if (toggleItem.amount - 1 <= 0) {
-                setItem(...data.toggleSlot.split(":"), null);
-            } else {
-                toggleItem.amount -= 1;
-                setItem(...data.toggleSlot.split(":"), toggleItem);
-            }
+            // Remove 1 from toggle stack
+            if (toggleItem.amount - 1 <= 0) setItem(...data.toggleSlot.split(":"), null);
+            else ((toggleItem.amount -= 1), setItem(...data.toggleSlot.split(":"), toggleItem));
 
-            if (!toItem) {
+            if (isSameItem(toItem, toggleItem)) {
+                toItem.amount += 1;
+                setItem(targetType, targetSlot, toItem);
+                data.old = targetSlot;
+            } else if (!toItem) {
                 const newItem = toggleItem.clone();
                 newItem.amount = 1;
                 setItem(targetType, targetSlot, newItem);
-            } else if (isSameItem(toItem, toggleItem)) {
-                toItem.amount += 1;
-                setItem(targetType, targetSlot, toItem);
+                data.old = targetSlot;
             } else {
                 toggleItem.amount += 1;
                 setItem(...data.toggleSlot.split(":"), toggleItem);
-                resetToggle();
+                data.old = targetSlot;
             }
         };
 
@@ -146,7 +145,7 @@ export function chestUi(player, old, data = {
         };
 
         const handleMove = (fromItem, toItem, fromType, fromSlot, toType, toSlot) => {
-            if (chestConfig.readOnly && toType === "chest") return;
+            if (chestConfig.readOnly && ((toType === "chest") || (fromType === "chest" && toType === "inventory"))) return;
             if (!chestConfig.allowPlayerItems && fromType === "inventory" && toType === "chest") return;
             if (!chestConfig.allowChestItems && fromType === "chest" && toType === "chest") return;
 
@@ -179,9 +178,8 @@ export function chestUi(player, old, data = {
             const fromItem = (old !== undefined) ? getItem(fromType, fromSlot) : null;
             const toItem = getItem(type, slot);
 
-            if (data.toggleSlot === `${type}:${slot}`) {
-                resetToggle();
-            } else if (fromItem?.isStackable && !data.onToggle && fromSlot === slot) {
+            if (data.toggleSlot === `${type}:${slot}`) resetToggle();
+            else if (fromItem?.isStackable && !data.onToggle && fromSlot === slot) {
                 data.onToggle = true;
                 data.toggleSlot = `${type}:${slot}`;
             }
@@ -191,6 +189,7 @@ export function chestUi(player, old, data = {
                 data.old = slot;
                 if (type === "chest") data.cOld = slot;
                 slot = undefined;
+
             } else if (fromItem && fromSlot !== slot) {
                 handleMove(fromItem, toItem, fromType, fromSlot, type, slot);
                 slot = undefined;
@@ -200,7 +199,8 @@ export function chestUi(player, old, data = {
             }
 
             data.oldPres = type;
-            chestUi(player, slot, data, chestConfig);
+
+            chestUi(player, slot, { ...data }, chestConfig);
         };
 
         if (pres.type === "inventory" || pres.type === "chest") {
