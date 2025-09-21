@@ -379,8 +379,11 @@ export class WeaponFX {
                         z: entity.location.z - startPos.z
                     });
 
+                    knockDir.x = knockDir.x * config.knockbackDistance;
+                    knockDir.z = knockDir.z * config.knockbackDistance; 
+
                     if (entity.applyKnockback) {
-                        entity.applyKnockback(knockDir, config.knockbackDistance / 10, 0.3);
+                        try { entity.applyKnockback(knockDir, 0.4) } catch {};
                     }
 
                     effectData.hitEntities.add(entity.id);
@@ -390,6 +393,215 @@ export class WeaponFX {
         }, 1);
 
         effectData.runId = runId;
+        return effectId;
+    }
+    /**
+     * Lightning Strike - spawns multiple lightning bolts around the player
+     */
+    static lightningStrike(player, options = {}) {
+        const config = {
+            strikes: options.strikes || 5,
+            radius: options.radius || 6,
+            damage: options.damage || 12,
+            particle: options.particle || "minecraft:electric_spark_particle",
+            ...options
+        };
+
+        const effectId = ++this.effectIdCounter;
+        const startPos = player.location;
+
+        for (let i = 0; i < config.strikes; i++) {
+            const angle = (Math.PI * 2 / config.strikes) * i;
+            const x = startPos.x + Math.cos(angle) * config.radius;
+            const z = startPos.z + Math.sin(angle) * config.radius;
+            const pos = { x, y: startPos.y, z };
+
+            try {
+                player.dimension.spawnParticle(config.particle, pos);
+                player.dimension.playSound("ambient.weather.thunder", pos);
+            } catch {}
+
+            const entities = player.dimension.getEntities({
+                location: pos,
+                maxDistance: 2,
+                excludeNames: [player.name],
+                excludeTypes: ["minecraft:item"]
+            });
+
+            entities.forEach(e => {
+                e.applyDamage(config.damage, { cause: "lightning", damagingEntity: player });
+            });
+        }
+
+        return effectId;
+    }
+
+    /**
+     * Black Hole - pulls entities into a point while damaging
+     */
+    static blackHole(player, options = {}) {
+        const config = {
+            duration: options.duration || 60,
+            radius: options.radius || 10,
+            pullStrength: options.pullStrength || 0.2,
+            damage: options.damage || 2,
+            particle: options.particle || "minecraft:portal_reverse_particle",
+            ...options
+        };
+
+        const effectId = ++this.effectIdCounter;
+        const center = player.location;
+
+        const effectData = {
+            id: effectId,
+            type: "blackhole",
+            startTime: system.currentTick,
+            config,
+            center,
+            hitEntities: new Set()
+        };
+
+        if (!this.activeEffects.has(player.id)) {
+            this.activeEffects.set(player.id, new Map());
+        }
+        this.activeEffects.get(player.id).set(effectId, effectData);
+
+        const runId = system.runInterval(() => {
+            const elapsed = system.currentTick - effectData.startTime;
+            if (elapsed > config.duration) {
+                system.clearRun(runId);
+                this.clearEffectById(player.id, effectData.id);
+                return;
+            }
+
+            // Core particle
+            try {
+                player.dimension.spawnParticle(config.particle, center);
+                if (Math.random() < 0.1) {
+                    player.dimension.playSound("mob.enderman.portal", center);
+                }
+            } catch {}
+
+            const entities = player.dimension.getEntities({
+                location: center,
+                maxDistance: config.radius,
+                excludeNames: [player.name],
+                excludeTypes: ["minecraft:item"]
+            });
+
+            entities.forEach(entity => {
+                // Pull entity toward center
+                const dir = {
+                    x: center.x - entity.location.x,
+                    y: center.y - entity.location.y,
+                    z: center.z - entity.location.z
+                };
+                const len = Math.sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+                if (len > 0) {
+                    dir.x /= len;
+                    dir.y /= len;
+                    dir.z /= len;
+                }
+
+                if (entity.applyKnockback) {
+                    entity.applyKnockback(dir, 0); // Using new beta signature
+                }
+
+                // Periodic damage
+                if (elapsed % 10 === 0) {
+                    entity.applyDamage(config.damage, { cause: "magic", damagingEntity: player });
+                }
+            });
+
+        }, 1);
+
+        effectData.runId = runId;
+        return effectId;
+    }
+
+    /**
+     * Icicle Burst - ice shards erupt around the player
+     */
+    static icicleBurst(player, options = {}) {
+        const config = {
+            shards: options.shards || 8,
+            radius: options.radius || 5,
+            damage: options.damage || 8,
+            particle: options.particle || "minecraft:snowflake_particle",
+            ...options
+        };
+
+        const effectId = ++this.effectIdCounter;
+        const pos = player.location;
+
+        for (let i = 0; i < config.shards; i++) {
+            const angle = (Math.PI * 2 / config.shards) * i;
+            const x = pos.x + Math.cos(angle) * config.radius;
+            const z = pos.z + Math.sin(angle) * config.radius;
+            const shardPos = { x, y: pos.y, z };
+
+            try {
+                player.dimension.spawnParticle(config.particle, shardPos);
+                player.dimension.playSound("block.amethyst_block.break", shardPos);
+            } catch {}
+
+            const entities = player.dimension.getEntities({
+                location: shardPos,
+                maxDistance: 2,
+                excludeNames: [player.name],
+                excludeTypes: ["minecraft:item"]
+            });
+
+            entities.forEach(e => {
+                e.applyDamage(config.damage, { cause: "freezing", damagingEntity: player });
+            });
+        }
+
+        return effectId;
+    }
+
+    /**
+     * Blade Arc - forward crescent slash
+     */
+    static async bladeArc(player, options = {}) {
+        const config = {
+            radius: options.radius || 6,
+            arcAngle: options.arcAngle || Math.PI / 2, // 90°
+            steps: options.steps || 12,
+            damage: options.damage || 10,
+            particle: options.particle || "minecraft:crit_particle",
+            ...options
+        };
+
+        const effectId = ++this.effectIdCounter;
+        const start = player.location;
+        const dir = player.getViewDirection();
+        const facing = Math.atan2(dir.z, dir.x);
+
+        player.dimension.playSound("item.trident.throw", player.location);
+
+        for (let i = -config.arcAngle / 2; i <= config.arcAngle / 2; i += config.arcAngle / config.steps) {
+            const angle = facing + i;
+            const x = start.x + Math.cos(angle) * config.radius;
+            const z = start.z + Math.sin(angle) * config.radius;
+            const pos = { x, y: start.y + 1, z };
+
+            try {
+                player.dimension.spawnParticle(config.particle, pos);
+            } catch {}
+
+            const entities = player.dimension.getEntities({
+                location: pos,
+                maxDistance: 2,
+                excludeNames: [player.name],
+                excludeTypes: ["minecraft:item"]
+            });
+
+            entities.forEach(e => {
+                e.applyDamage(config.damage, { cause: "entityAttack", damagingEntity: player });
+            });
+            await system.waitTicks(1); // Small delay for effect spread
+        }
         return effectId;
     }
 }
