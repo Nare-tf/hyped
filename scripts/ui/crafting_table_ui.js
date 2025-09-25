@@ -19,7 +19,7 @@ export function craftingUi(player, old, data = {
     const craftingUIx = new AccessibleCraftingTableFormData().title("Crafting Table");
 
     data.table.forEach((item, i) => item && craftingUIx.put(i, item));
-    const result = RecipeRegister.get(data.table);
+    const result = RecipeRegister.get(data.table, player);
     if (result) {
         craftingUIx.put(9, result);
         data.output = result;

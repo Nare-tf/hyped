@@ -315,7 +315,7 @@ export class WeaponFX {
         };
 
         const effectId = ++this.effectIdCounter;
-        const startPos = player.location;
+        const startPos = options.location ?? player.location;
         
         const effectData = {
             id: effectId,
